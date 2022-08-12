@@ -27,9 +27,9 @@ public class ToggleMR : MonoBehaviour
         if (Input.anyKeyDown)
         {
             if (Input.GetKeyDown(MRToggleKey))
-                mrController.videoSeeThrough = !mrController.videoSeeThrough;
+                mrController.VideoSeeThrough = !mrController.VideoSeeThrough;
             if (Input.GetKeyDown(depthEstimationToggleKey))
-                mrController.depthEstimation = !mrController.depthEstimation;
+                mrController.DepthEstimation = !mrController.DepthEstimation;
             //if (Input.GetKeyDown(reflectionToggleKey))
             //    mrController.environmentReflections = !mrController.environmentReflections;
             if (Input.GetKeyDown(VREyeOffsetToggleKey))
@@ -37,7 +37,7 @@ public class ToggleMR : MonoBehaviour
                     mrController.VREyeOffset = 1.0f;
                 else
                     mrController.VREyeOffset = 0f;
-            if (Input.GetKeyDown(DirectionalLightToggleKey))
+            if (Input.GetKeyDown(DirectionalLightToggleKey) && directionalLight != null)
                 directionalLight.SetActive(!directionalLight.activeSelf);
         }
     }

@@ -14,22 +14,110 @@ public class MRController : MonoBehaviour
     public Camera xrCamera;
 
     [Header("Mixed Reality Features")]
-    public bool videoSeeThrough = true;
-    public bool depthEstimation = false;
+    private bool _videoSeeThrough = false;
+    public bool VideoSeeThrough
+    {
+        get => _videoSeeThrough;
+        set
+        {
+            if (_videoSeeThrough == value) return;
+            _videoSeeThrough = value;
+
+            if (_videoSeeThrough)
+            {
+                _videoSeeThrough = VarjoMixedReality.StartRender();
+                if(!_videoSeeThrough) 
+                {
+                    Debug.LogError("Error Starting Mixed Reality Mode");
+                    return;
+                }
+
+                if (HDCameraData)
+                    HDCameraData.clearColorMode = HDAdditionalCameraData.ClearColorMode.Color;
+            }
+            else
+            {
+                VarjoMixedReality.StopRender();
+                if (HDCameraData)
+                    HDCameraData.clearColorMode = HDAdditionalCameraData.ClearColorMode.Sky;
+            }
+        }
+    }
+    private bool _depthEstimation = false;
+    public bool DepthEstimation
+    {
+        get => _depthEstimation;
+        set
+        {
+            if (_videoSeeThrough == value) return;
+            _depthEstimation = value;
+
+            if (_depthEstimation)
+            {
+                _depthEstimation = VarjoMixedReality.EnableDepthEstimation();
+                if(!_depthEstimation)
+                {
+                    Debug.LogError("Error Enabling Depth Estimation");
+                    return;
+                }
+
+                originalSubmitDepthValue = VarjoRendering.GetSubmitDepth();
+                originalDepthSortingValue = VarjoRendering.GetDepthSorting();
+                VarjoRendering.SetSubmitDepth(true);
+                VarjoRendering.SetDepthSorting(true);
+            }
+            else
+            {
+                VarjoMixedReality.DisableDepthEstimation();
+                VarjoRendering.SetSubmitDepth(originalSubmitDepthValue);
+                VarjoRendering.SetDepthSorting(originalDepthSortingValue);
+            }
+        }
+    }
+
+    private float _currentVREyeOffset = 1.0f;
     [Range(0f, 1.0f)]
     public float VREyeOffset = 1.0f;
 
     [Header("Real Time Environment")]
-    public bool environmentReflections = false;
+    private bool _environmentReflections = false;
+    public bool EnvironmentReflections
+    {
+        get => _environmentReflections;
+        set
+        {
+            if (_environmentReflections != value)
+            {
+                _environmentReflections = value;
+                if (_environmentReflections)
+                {
+                    if (VarjoMixedReality.environmentCubemapStream.IsSupported())
+                    {
+                        _environmentReflections = VarjoMixedReality.environmentCubemapStream.Start();
+                        if (!_environmentReflections)
+                        {
+                            Debug.LogError("Error Starting Environment Cubemap Stream");
+                            return;
+                        }
+                    }
+
+                    if (!cameraSubsystem.IsMetadataStreamEnabled)
+                        cameraSubsystem.EnableMetadataStream();
+                    metadataStreamEnabled = cameraSubsystem.IsMetadataStreamEnabled;
+                }
+                else
+                {
+                    VarjoMixedReality.environmentCubemapStream.Stop();
+                    cameraSubsystem.DisableMetadataStream();
+                }
+            }
+        }
+    }
+
     public int reflectionRefreshRate = 30;
     public VolumeProfile m_skyboxProfile = null;
     public Cubemap defaultSky = null;
     public CubemapEvent onCubemapUpdate = new();
-
-    private bool videoSeeThroughEnabled = false;
-    private bool environmentReflectionsEnabled = false;
-    private bool depthEstimationEnabled = false;
-    private float currentVREyeOffset = 1f;
 
     private bool metadataStreamEnabled = false;
     private VarjoCameraMetadataStream.VarjoCameraMetadataFrame metadataFrame;
@@ -89,82 +177,21 @@ public class MRController : MonoBehaviour
 
     void UpdateMRFeatures()
     {
-        UpdateVideoSeeThrough();
-        UpdateDepthEstimation();
         UpdateVREyeOffSet();
-        UpdateEnvironmentReflections();
-    }
-
-    void UpdateVideoSeeThrough()
-    {
-        //if (videoSeeThrough == videoSeeThroughEnabled) return;
-
-        if (videoSeeThrough)
-        {
-            videoSeeThrough = VarjoMixedReality.StartRender();
-            if (HDCameraData)
-                HDCameraData.clearColorMode = HDAdditionalCameraData.ClearColorMode.Color;
-        }
-        else
-        {
-            VarjoMixedReality.StopRender();
-            if (HDCameraData)
-                HDCameraData.clearColorMode = HDAdditionalCameraData.ClearColorMode.Sky;
-        }
-        videoSeeThroughEnabled = videoSeeThrough;
-    }
-
-    void UpdateDepthEstimation()
-    {
-        if (depthEstimation == depthEstimationEnabled) return;
-
-        if (depthEstimation)
-        {
-            depthEstimation = VarjoMixedReality.EnableDepthEstimation();
-            originalSubmitDepthValue = VarjoRendering.GetSubmitDepth();
-            originalDepthSortingValue = VarjoRendering.GetDepthSorting();
-            VarjoRendering.SetSubmitDepth(true);
-            VarjoRendering.SetDepthSorting(true);
-        }
-        else
-        {
-            VarjoMixedReality.DisableDepthEstimation();
-            VarjoRendering.SetSubmitDepth(originalSubmitDepthValue);
-            VarjoRendering.SetDepthSorting(originalDepthSortingValue);
-        }
-        depthEstimationEnabled = depthEstimation;
+        UpdateReflections();
     }
 
     void UpdateVREyeOffSet()
     {
-        if (VREyeOffset == currentVREyeOffset) return;
+        if (VREyeOffset == _currentVREyeOffset) return;
 
         VarjoMixedReality.SetVRViewOffset(VREyeOffset);
-        currentVREyeOffset = VREyeOffset;
+        _currentVREyeOffset = VREyeOffset;
     }
 
-    void UpdateEnvironmentReflections()
+    void UpdateReflections()
     {
-        if (environmentReflections != environmentReflectionsEnabled)
-        {
-            if (environmentReflections)
-            {
-                if (VarjoMixedReality.environmentCubemapStream.IsSupported())
-                    environmentReflections = VarjoMixedReality.environmentCubemapStream.Start();
-
-                if (!cameraSubsystem.IsMetadataStreamEnabled)
-                    cameraSubsystem.EnableMetadataStream();
-                metadataStreamEnabled = cameraSubsystem.IsMetadataStreamEnabled;
-            }
-            else
-            {
-                VarjoMixedReality.environmentCubemapStream.Stop();
-                cameraSubsystem.DisableMetadataStream();
-            }
-            environmentReflectionsEnabled = environmentReflections;
-        }
-
-        if (environmentReflectionsEnabled && metadataStreamEnabled)
+        if (EnvironmentReflections && metadataStreamEnabled)
         {
             if (VarjoMixedReality.environmentCubemapStream.hasNewFrame && cameraSubsystem.MetadataStream.hasNewFrame)
             {
@@ -202,9 +229,9 @@ public class MRController : MonoBehaviour
 
     void OnDisable()
     {
-        videoSeeThrough = false;
-        depthEstimation = false;
-        environmentReflections = false;
+        VideoSeeThrough = false;
+        DepthEstimation = false;
+        EnvironmentReflections = false;
         UpdateMRFeatures();
         VarjoRendering.SetOpaque(originalOpaqueValue);
     }
